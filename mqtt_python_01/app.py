@@ -8,22 +8,22 @@ BROKER = "localhost"  # เปลี่ยนเป็น IP หรือ hostna
 PORT = 1883           # พอร์ตของ MQTT Broker (ค่าเริ่มต้นคือ 1883)
 TOPIC_PREFIX = "iot_sensors/test_data"  # Prefix สำหรับ topic
 NUM_TOPICS = 200       # จำนวน topics
-PUBLISH_INTERVAL = 1   # วินาที
+PUBLISH_INTERVAL = 3   # วินาที
 
 count = 0
 # Payload Template
 def generate_payload(topic_id,count):
     return {
         "master": f"data_{topic_id}",
-        "data_2": count,
-        "data_3": 1000000,
+        "data_id": count,
+        "master": "test",
         "data_4": 1000000,
         "data_5": 1000000,
         "data_6": 1000000,
         "data_7": 1000000,
         "data_8": 1000000,
         "data_9": 1000000,
-        "data_10": 1000000,
+        "data_11": 1000000.058,
     }
 
 # Publish Messages to MQTT Broker

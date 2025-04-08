@@ -8,7 +8,7 @@ import re
 import json
 from dotenv import load_dotenv
 import os
-
+import pandas as pd
 # ==========================
 # 🔹 LOAD ENVIRONMENT VARIABLES
 # ==========================
@@ -196,53 +196,121 @@ def fetch_influxdb_data():
 # 🔹 INSERT INTO MSSQL
 # ==========================
 def insert_data_to_mssql(data):
-    conn = connect_mssql()
-    cursor = conn.cursor()
+    conn = connect_mssql()  # เชื่อมต่อกับ MSSQL
+    cursor = conn.cursor()  # สร้าง cursor สำหรับการทำงานกับฐานข้อมูล
 
-    for table_name, rows in data.items():
-        for row in rows:
-            try:
+    for table_name, rows in data.items():  # วนลูปตามตารางในข้อมูล
+        if not rows:
+            print(f"⚠️ ไม่มีข้อมูลให้แทรกสำหรับตาราง: {table_name}")
+            continue
+
+        try:
+            # เตรียมรายการของ tuple สำหรับการแทรกข้อมูลเป็นชุด
+            insert_values = []
+            for row in rows:  # วนลูปแถวในตารางนั้น
                 timestamp = datetime.datetime.strptime(row['time'], '%Y-%m-%dT%H:%M:%S.%fZ') + timedelta(hours=7)
                 timestamp_str = timestamp.isoformat()
                 topic = row['topic']
                 values = {key: row[key] for key in row if key not in ['time', 'topic', 'host']}
 
+                # ตรวจสอบว่าแถวนี้มีอยู่ในฐานข้อมูลแล้วหรือไม่
                 check_query = f"SELECT COUNT(*) FROM {table_name} WHERE time = %s AND topic = %s"
                 cursor.execute(check_query, (timestamp, topic))
                 if cursor.fetchone()[0] == 0:
-                    columns = ', '.join(['topic'] + list(values.keys()))
-                    placeholders = ', '.join(['%s'] * (len(values) + 1))
-                    insert_query = f"INSERT INTO {table_name} (time, {columns}) VALUES (%s, {placeholders})"
-                    cursor.execute(insert_query, (timestamp, topic, *values.values()))
-                    conn.commit()
+                    # เพิ่มข้อมูลเข้าไปในรายการสำหรับการแทรก
+                    insert_values.append((timestamp, topic, *values.values()))
 
-                    mqtt_message = {
-                        "data_id": values.get("data_id", None),
-                        "status": "success",
-                        "error" : "ok",
-                        "timestamp": timestamp_str,
-                        "table_name": table_name
-                    }
-                    mqtt_client.publish(MQTT_TOPIC_CANNOT_INSERT, json.dumps(mqtt_message))
-                    print(f"✅ Inserted: {timestamp} | Table: {table_name}")
-                else:
-                    print(f"⚠️ Data already exists for: {timestamp} | Table: {table_name}")
-            except Exception as e:
-                conn.rollback()
+            if not insert_values:
+                print(f"⚠️ ไม่มีข้อมูลใหม่ให้แทรกสำหรับตาราง: {table_name}")
+                continue
+
+            # เตรียมคำสั่ง INSERT สำหรับการแทรกเป็นชุด
+            columns = ', '.join(['time', 'topic'] + list(values.keys()))
+            placeholders = ', '.join(['%s'] * (len(values) + 2))  # +2 สำหรับ time และ topic
+            insert_query = f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})"
+
+            # ดำเนินการแทรกข้อมูลเป็นชุด
+            cursor.executemany(insert_query, insert_values)
+            conn.commit()  # ยืนยันการเปลี่ยนแปลงในฐานข้อมูล
+
+            # ส่งข้อความ MQTT เพื่อแจ้งความสำเร็จสำหรับแต่ละแถว
+            for timestamp, topic, *vals in insert_values:
                 mqtt_message = {
-                    "data_id": row.get("data_id", None),
-                    "status": "fail",
-                    "error": str(e),
-                    "timestamp": timestamp_str,
+                    "data_id": values.get("data_id", None),  # ปรับตามความเหมาะสมถ้าต้องการ data_id เฉพาะ
+                    "status": "success",
+                    "error": "ok",
+                    "timestamp": timestamp.isoformat(),
                     "table_name": table_name
                 }
                 mqtt_client.publish(MQTT_TOPIC_CANNOT_INSERT, json.dumps(mqtt_message))
-                print(f"⚠️ Failed to insert: {timestamp} | Table: {table_name}")
-                print(f"📡 Published to MQTT: {mqtt_message}")
-                # time.sleep(0.1)
+            print(f"✅ แทรกข้อมูล {len(insert_values)} แถวลงใน: {table_name} สำเร็จ")
 
-    cursor.close()
-    conn.close()
+        except Exception as e:
+            conn.rollback()  # ยกเลิกการเปลี่ยนแปลงถ้ามีข้อผิดพลาด
+            # ส่งข้อความ MQTT เพื่อแจ้งข้อผิดพลาด
+            mqtt_message = {
+                "data_id": rows[0].get("data_id", None) if rows else None,
+                "status": "fail",
+                "error": str(e),
+                "timestamp": datetime.datetime.utcnow().isoformat(),
+                "table_name": table_name
+            }
+            mqtt_client.publish(MQTT_TOPIC_CANNOT_INSERT, json.dumps(mqtt_message))
+            print(f"⚠️ ไม่สามารถแทรกข้อมูลลงใน: {table_name} | ข้อผิดพลาด: {e}")
+
+    cursor.close()  # ปิด cursor
+    conn.close()  # ปิดการเชื่อมต่อ
+# def filter_data_by_table_schema_with_types(all_data):
+#     conn = connect_mssql()
+#     cursor = conn.cursor()
+
+#     filtered_data = {}
+
+#     for table_name, rows in all_data.items():
+#         # 🔍 ดึง schema ของตารางนั้น ๆ
+#         cursor.execute(f"""
+#             SELECT COLUMN_NAME, DATA_TYPE
+#             FROM INFORMATION_SCHEMA.COLUMNS
+#             WHERE TABLE_NAME = '{table_name}'
+#               AND COLUMN_NAME NOT IN ('time', 'topic')
+#         """)
+#         result = cursor.fetchall()
+#         column_types = {col[0]: col[1].lower() for col in result}
+
+#         new_rows = []
+#         for row in rows:
+#             filtered_row = {"time": row["time"], "topic": row["topic"]}
+
+#             for col_name, data_type in column_types.items():
+#                 if col_name in row:
+#                     value = row[col_name]
+#                     try:
+#                         # 🛠 แปลงค่าตามชนิด
+#                         if data_type in ['float', 'real']:
+#                             filtered_row[col_name] = float(value)
+#                         elif data_type in ['int', 'bigint', 'smallint', 'tinyint']:
+#                             filtered_row[col_name] = int(float(value))
+#                         elif data_type in ['bit']:
+#                             filtered_row[col_name] = bool(int(value))
+#                         elif data_type in ['nvarchar', 'varchar', 'text']:
+#                             filtered_row[col_name] = str(value)
+#                         elif data_type in ['datetime', 'smalldatetime']:
+#                             filtered_row[col_name] = str(value)  # ควรเป็น ISO format
+#                         else:
+#                             filtered_row[col_name] = str(value)  # default fallback
+#                     except Exception as e:
+#                         print(f"⚠️ Skip column '{col_name}' in row (value: {value}) due to: {e}")
+#                         continue
+
+#             new_rows.append(filtered_row)
+
+#         filtered_data[table_name] = new_rows
+
+#     cursor.close()
+#     conn.close()
+#     return filtered_data
+
+
 
 def filter_data_by_table_schema_with_types(all_data):
     conn = connect_mssql()
@@ -251,7 +319,12 @@ def filter_data_by_table_schema_with_types(all_data):
     filtered_data = {}
 
     for table_name, rows in all_data.items():
-        # 🔍 ดึง schema ของตารางนั้น ๆ
+        if not rows:
+            print(f"⚠️ ไม่มีแถวในตาราง: {table_name}")
+            filtered_data[table_name] = []
+            continue
+
+        # ดึง schema ของตาราง
         cursor.execute(f"""
             SELECT COLUMN_NAME, DATA_TYPE
             FROM INFORMATION_SCHEMA.COLUMNS
@@ -261,40 +334,44 @@ def filter_data_by_table_schema_with_types(all_data):
         result = cursor.fetchall()
         column_types = {col[0]: col[1].lower() for col in result}
 
-        new_rows = []
-        for row in rows:
-            filtered_row = {"time": row["time"], "topic": row["topic"]}
+        if not column_types:
+            print(f"⚠️ ไม่พบคอลัมน์ใน schema สำหรับตาราง: {table_name}")
+            filtered_data[table_name] = []
+            continue
 
-            for col_name, data_type in column_types.items():
-                if col_name in row:
-                    value = row[col_name]
-                    try:
-                        # 🛠 แปลงค่าตามชนิด
-                        if data_type in ['float', 'real']:
-                            filtered_row[col_name] = float(value)
-                        elif data_type in ['int', 'bigint', 'smallint', 'tinyint']:
-                            filtered_row[col_name] = int(float(value))
-                        elif data_type in ['bit']:
-                            filtered_row[col_name] = bool(int(value))
-                        elif data_type in ['nvarchar', 'varchar', 'text']:
-                            filtered_row[col_name] = str(value)
-                        elif data_type in ['datetime', 'smalldatetime']:
-                            filtered_row[col_name] = str(value)  # ควรเป็น ISO format
-                        else:
-                            filtered_row[col_name] = str(value)  # default fallback
-                    except Exception as e:
-                        print(f"⚠️ Skip column '{col_name}' in row (value: {value}) due to: {e}")
-                        continue
+        # แปลงข้อมูลเป็น DataFrame
+        df = pd.DataFrame(rows)
 
-            new_rows.append(filtered_row)
+        # สร้าง DataFrame ใหม่โดยเก็บเฉพาะ time และ topic
+        filtered_df = df[['time', 'topic']].copy()
 
-        filtered_data[table_name] = new_rows
+        # กรองและแปลงคอลัมน์ตาม schema
+        for col_name, data_type in column_types.items():
+            if col_name in df.columns:
+                try:
+                    if data_type in ['float', 'real']:
+                        filtered_df[col_name] = pd.to_numeric(df[col_name], errors='coerce').astype(float)
+                    elif data_type in ['int', 'bigint', 'smallint', 'tinyint']:
+                        filtered_df[col_name] = pd.to_numeric(df[col_name], errors='coerce').astype('Int64')  # รองรับค่า null
+                    elif data_type in ['bit']:
+                        filtered_df[col_name] = df[col_name].astype(bool)
+                    elif data_type in ['nvarchar', 'varchar', 'text']:
+                        filtered_df[col_name] = df[col_name].astype(str)
+                    elif data_type in ['datetime', 'smalldatetime']:
+                        filtered_df[col_name] = df[col_name].astype(str)
+                    else:
+                        filtered_df[col_name] = df[col_name].astype(str)
+                except Exception as e:
+                    print(f"⚠️ ข้ามคอลัมน์ '{col_name}' เนื่องจาก: {e}")
+                    filtered_df[col_name] = None
+
+        # แปลงกลับเป็น list of dicts
+        filtered_data[table_name] = filtered_df.to_dict(orient='records')
+        print(f"✅ กรองข้อมูลสำหรับตาราง: {table_name} เสร็จสิ้น (จำนวนแถว: {len(filtered_data[table_name])})")
 
     cursor.close()
     conn.close()
     return filtered_data
-
-
 
 def main():
     # 🔹 สร้างตารางก่อน และรับ mapping ของ column ที่สร้าง
@@ -302,6 +379,7 @@ def main():
     while True:
         time.sleep(DELAY)
         try:
+            start = time.time()
             create_mssql_tables()
             # 🔹 ดึงข้อมูลจาก InfluxDB
             influx_data = fetch_influxdb_data()
@@ -310,9 +388,9 @@ def main():
             print("filtered_data: clear")
             # 🔹 Insert ข้อมูล
             if filtered_data:
-                start = time.time()
+                
                 insert_data_to_mssql(filtered_data)
-                print(time.time()-start)
+                 
             else:
                 print("❌ No matching data to insert!")
 
@@ -326,7 +404,10 @@ def main():
             }
             mqtt_client.publish(MQTT_TOPIC_CANNOT_INSERT, json.dumps(mqtt_message))
             print(f"🚨 Error: {e}")
-        time.sleep(INTERVAL * 60 - DELAY)
+        use_time = time.time()-start
+        print(use_time)
+        if use_time < INTERVAL * 60 - DELAY:
+            time.sleep(INTERVAL * 60 - DELAY)
 
 
 # ==========================
