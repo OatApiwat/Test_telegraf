@@ -264,9 +264,43 @@ def insert_mssql(data, table_name):
     finally:
         if conn:
             conn.close()
+
+# def time_exited(table_name):
+#     try:
+#         # เชื่อมต่อ MSSQL
+#         conn = connect_mssql()
+#         if not conn:
+#             print(f"Error connecting to MSSQL for table {table_name}")
+#             return None
+
+#         cursor = conn.cursor()
+        
+#         query = f"""
+#             SELECT time 
+#             FROM {table_name} 
+#             WHERE time >= DATEADD(MINUTE, -5, GETDATE())
+#         """
+#         cursor.execute(query)
+        
+#         # ดึงผลลัพธ์ที่ได้
+#         rows = cursor.fetchall()
+        
+#         if not rows:
+#             print(f"No data found in {table_name} for the last 5 minutes")
+#             return None
+        
+#         print(f"Fetched {len(rows)} rows from {table_name} for the last 5 minutes.")
+#         return rows  # คืนค่าข้อมูลที่ดึงมา
+        
+#     except Exception as e:
+#         print(f"Error fetching data from MSSQL for table {table_name}: {e}")
+#         return None
+    
+#     finally:
+#         if conn:
+#             conn.close()
 def time_exited(table_name):
     try:
-        # เชื่อมต่อ MSSQL
         conn = connect_mssql()
         if not conn:
             print(f"Error connecting to MSSQL for table {table_name}")
@@ -275,21 +309,19 @@ def time_exited(table_name):
         cursor = conn.cursor()
         
         query = f"""
-            SELECT time 
+            SELECT time, topic 
             FROM {table_name} 
             WHERE time >= DATEADD(MINUTE, -5, GETDATE())
         """
         cursor.execute(query)
-        
-        # ดึงผลลัพธ์ที่ได้
         rows = cursor.fetchall()
         
         if not rows:
             print(f"No data found in {table_name} for the last 5 minutes")
             return None
-        
-        print(f"Fetched {len(rows)} rows from {table_name} for the last 5 minutes.")
-        return rows  # คืนค่าข้อมูลที่ดึงมา
+
+        print(f"Fetched {len(rows)} rows (time + topic) from {table_name} for the last 5 minutes.")
+        return rows  # คืนค่ารูปแบบ [(time, topic), ...]
         
     except Exception as e:
         print(f"Error fetching data from MSSQL for table {table_name}: {e}")
@@ -298,21 +330,40 @@ def time_exited(table_name):
     finally:
         if conn:
             conn.close()
+
+
+# def filter_data(influx_data, time_exit):
+#     # ถ้า time_exit เป็น None หรือไม่มีข้อมูล ให้ส่งคืนข้อมูลทั้งหมดจาก influx_data
+#     if not time_exit:
+#         return influx_data
+    
+#     # สร้าง set สำหรับเวลาใน time_exit เพื่อลบข้อมูลที่ตรง
+#     time_exit_set = {time[0] for time in time_exit}  # ใช้เวลาใน time_exit เป็น set เพื่อความเร็วในการค้นหา
+    
+#     # ใช้ list comprehension ในการกรองข้อมูล
+#     # วิธีนี้จะทำให้การตรวจสอบเวลาใน influx_data และ time_exit_set มีประสิทธิภาพมากขึ้น
+#     filtered_data = [data for data in influx_data if data['time'] not in time_exit_set]
+    
+#     print(f"Filtered out {len(influx_data) - len(filtered_data)} duplicate rows based on time")
+    
+#     return filtered_data
+
 def filter_data(influx_data, time_exit):
-    # ถ้า time_exit เป็น None หรือไม่มีข้อมูล ให้ส่งคืนข้อมูลทั้งหมดจาก influx_data
     if not time_exit:
         return influx_data
-    
-    # สร้าง set สำหรับเวลาใน time_exit เพื่อลบข้อมูลที่ตรง
-    time_exit_set = {time[0] for time in time_exit}  # ใช้เวลาใน time_exit เป็น set เพื่อความเร็วในการค้นหา
-    
-    # ใช้ list comprehension ในการกรองข้อมูล
-    # วิธีนี้จะทำให้การตรวจสอบเวลาใน influx_data และ time_exit_set มีประสิทธิภาพมากขึ้น
-    filtered_data = [data for data in influx_data if data['time'] not in time_exit_set]
-    
-    print(f"Filtered out {len(influx_data) - len(filtered_data)} duplicate rows based on time")
-    
+
+    # ใช้ set ของ tuple (time, topic) เพื่อความเร็ว
+    time_topic_set = {(row[0], row[1]) for row in time_exit}
+
+    # กรองเฉพาะข้อมูลที่ไม่มี (time, topic) ซ้ำกัน
+    filtered_data = [
+        data for data in influx_data
+        if (data['time'], data.get('topic')) not in time_topic_set
+    ]
+
+    print(f"Filtered out {len(influx_data) - len(filtered_data)} duplicate rows based on time + topic")
     return filtered_data
+
 
 # Modified main function
 def main():
