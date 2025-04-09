@@ -87,7 +87,6 @@ mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 60)
 # 🔹 CREATE TABLES BY TOPIC
 # ==========================
 
-
 def create_mssql_tables():
     conn = connect_mssql()
     cursor = conn.cursor()

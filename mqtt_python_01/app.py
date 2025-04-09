@@ -16,7 +16,7 @@ def generate_payload(topic_id,count):
     return {
         "master": f"data_{topic_id}",
         "data_id": count,
-        "master": "test",
+        "master_id": "test",
         "data_4": 1000000,
         "data_5": 1000000,
         "data_6": 1000000,
