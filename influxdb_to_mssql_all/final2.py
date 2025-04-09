@@ -317,19 +317,22 @@ def filter_data(influx_data, time_exit):
 # Modified main function
 def main():
     while True:
-        if not connect_influxdb():
-            time.sleep(1)  # Wait before retrying
-            continue  
-        for measurement in MEASUREMENT_LIST:
-            column_info = create_table_mssql(measurement)
-            if column_info is not None:  # ใช้ != เพื่อเช็คว่า column_info ไม่ใช่ None
-                influx_data = fetch_influxdb_data(column_info,measurement)
-                time_exit = time_exited(f"{measurement}_tb")
-                data_insert = filter_data(influx_data,time_exit)
-                # print("time_exit: ",time_exit)
-                insert_mssql(data_insert,f"{measurement}_tb")
-        
-        time.sleep(60)  # Wait for next iteration
+        try:
+            if not connect_influxdb():
+                time.sleep(1)  # Wait before retrying
+                continue  
+            for measurement in MEASUREMENT_LIST:
+                column_info = create_table_mssql(measurement)
+                if column_info is not None:  # ใช้ != เพื่อเช็คว่า column_info ไม่ใช่ None
+                    influx_data = fetch_influxdb_data(column_info,measurement)
+                    time_exit = time_exited(f"{measurement}_tb")
+                    data_insert = filter_data(influx_data,time_exit)
+                    # print("time_exit: ",time_exit)
+                    insert_mssql(data_insert,f"{measurement}_tb")
+            
+            time.sleep(60)  # Wait for next iteration
+        except Exception as e:
+            print(f"Main error: {e}")
 # ==========================
 # 🔹 RUN SCRIPT
 # ==========================
