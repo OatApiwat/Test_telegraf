@@ -9,6 +9,8 @@ services:
       - ./mosquitto/config:/mosquitto/config
       - ./mosquitto/data:/mosquitto/data
       - ./mosquitto/log:/mosquitto/log
+    networks:
+      - iot_network
     restart: unless-stopped
 
   telegraf:
@@ -21,18 +23,22 @@ services:
     depends_on:
       - mosquitto
       - influxdb
+    networks:
+      - iot_network
     restart: unless-stopped
 
   influxdb:
     image: influxdb:1.8
     container_name: influxdb
     environment:
-      - INFLUXDB_DB=iot_data
+      - INFLUXDB_DB=test_db
       - INFLUXDB_HTTP_AUTH_ENABLED=false
     ports:
       - "8086:8086"
     volumes:
       - ./influxdb/data:/var/lib/influxdb
+    networks:
+      - iot_network
     restart: unless-stopped
 
   grafana:
@@ -46,6 +52,8 @@ services:
       - ./grafana/data:/var/lib/grafana
     depends_on:
       - influxdb
+    networks:
+      - iot_network
     restart: unless-stopped
     
   # mqtt_python_1:
@@ -55,5 +63,9 @@ services:
   #     - mosquitto
   #   restart: unless-stopped
 
+
+networks:
+  iot_network:
+    driver: bridge
 
 
