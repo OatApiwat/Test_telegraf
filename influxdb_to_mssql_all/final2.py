@@ -26,7 +26,7 @@ MSSQL_PASSWORD = os.getenv('MSSQL_PASSWORD', 'sa@admin')
 MSSQL_DATABASE = os.getenv('MSSQL_DATABASE', 'iot_db')
 MSSQL_PORT = int(os.getenv('MSSQL_PORT', 1433))
 
-INTERVAL = int(os.getenv('INTERVAL', 60))
+INTERVAL = int(os.getenv('INTERVAL', 1))
 
 def connect_influxdb():
     global influx_client
@@ -330,7 +330,7 @@ def main():
                     # print("time_exit: ",time_exit)
                     insert_mssql(data_insert,f"{measurement}_tb")
             
-            time.sleep(60)  # Wait for next iteration
+            time.sleep(INTERVAL*60)  # Wait for next iteration
         except Exception as e:
             print(f"Main error: {e}")
 # ==========================
