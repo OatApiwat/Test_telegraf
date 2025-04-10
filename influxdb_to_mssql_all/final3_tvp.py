@@ -12,7 +12,8 @@ import os
 # โหลดค่าจากไฟล์ .env
 load_dotenv()
 
-MEASUREMENT_LIST = ['test_data', 'test_data2', 'mesure_2', 'mesure_3', 'mesure_4']
+# MEASUREMENT_LIST = ['test_data', 'test_data2', 'mesure_2', 'mesure_3', 'mesure_4']
+MEASUREMENT_PREFIXES = ['test#', 'mesure#']
 # InfluxDB client
 influx_client = None
 # Load environment variables
@@ -76,6 +77,32 @@ def connect_mssql():
     except Exception as e:
         print(f"MSSQL connection failed: {e}")
         return None
+
+def get_measurements_from_influxdb(prefixes=['test#', 'mesure#']):
+    """Get all measurements from InfluxDB matching the given prefixes"""
+    global influx_client
+    try:
+        if not influx_client:
+            if not connect_influxdb():
+                return []
+        
+        # Query all measurements
+        result = influx_client.query('SHOW MEASUREMENTS')
+        all_measurements = [m['name'] for m in result.get_points()]
+        
+        # Filter measurements based on prefixes
+        measurement_list = []
+        for prefix in prefixes:
+            # Remove the # symbol and use as prefix for filtering
+            prefix_base = prefix.rstrip('#')
+            matching_measurements = [m for m in all_measurements if m.startswith(prefix_base)]
+            measurement_list.extend(matching_measurements)
+            
+        return sorted(list(set(measurement_list)))  # Remove duplicates and sort
+    
+    except Exception as e:
+        print(f"Error fetching measurements from InfluxDB: {e}")
+        return []
 
 def map_influx_to_mssql_type(influx_type):
     """Map InfluxDB data types to MSSQL data types"""
@@ -337,7 +364,14 @@ def main():
         try:
             if not connect_influxdb():
                 time.sleep(1)
-                continue  
+                continue
+            MEASUREMENT_LIST = get_measurements_from_influxdb(MEASUREMENT_PREFIXES)
+            if not MEASUREMENT_LIST:
+                print("No matching measurements found")
+                time.sleep(INTERVAL*30)
+                continue
+                
+            print(f"Processing measurements: {MEASUREMENT_LIST}")
             for measurement in MEASUREMENT_LIST:
                 column_info = create_table_mssql(measurement)
                 if column_info is not None:
