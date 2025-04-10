@@ -5,3 +5,6 @@ ALTER RETENTION POLICY "7_days" ON "test_db" DEFAULT
 
 DROP PROCEDURE usp_Insert_test_data;
 DROP TYPE dbo.test_data_tvp_type;
+
+DROP PROCEDURE usp_Insert_test_data2;
+DROP TYPE dbo.test_data2_tvp_type;
