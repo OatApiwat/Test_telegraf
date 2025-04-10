@@ -352,6 +352,7 @@ def get_last_time(table_name):
 def main():
     while True:
         try:
+            start_time = time.time()
             if not connect_influxdb():
                 time.sleep(1)
                 continue
@@ -369,8 +370,9 @@ def main():
                     influx_data = fetch_influxdb_data(column_info, measurement, last_time)
                     print("ok")
                     insert_mssql(influx_data, f"{measurement}_tb")
-            
-            time.sleep(INTERVAL*60)
+            elapsed_time = time.time() - start_time  # คำนวณเวลาที่ใช้
+            remaining_time = max(0, INTERVAL*60 - elapsed_time)  # คำนวณเวลาที่เหลือให้ครบ 60 วินาที
+            time.sleep(remaining_time)  # หยุดเพิ่มตามเวลาที่เหลือ
         except Exception as e:
             print(f"Main error: {e}")
 
