@@ -225,7 +225,7 @@ def fetch_influxdb_data(column_info, measurement, time_exit):
         columns = [col[0] for col in column_info if col[0] != 'time']
         columns_str = ", ".join(columns)
         print("start_time_str: ",start_time_str)
-        query = f'SELECT {columns_str} FROM "{measurement}" WHERE time > \'{start_time_str}\''
+        query = f'SELECT {columns_str} FROM "{measurement}" WHERE time >= \'{start_time_str}\''
         result = influx_client.query(query)
         
         if not result:
