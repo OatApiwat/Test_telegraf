@@ -217,7 +217,7 @@ def fetch_influxdb_data(column_info, measurement, time_exit):
         now = datetime.datetime.utcnow()
         
         if time_exit:
-            start_time = time_exit
+            start_time = time_exit + datetime.timedelta(microseconds=1)
         else:
             start_time = now - datetime.timedelta(minutes=INTERVAL * 5, seconds=now.second, microseconds=now.microsecond)
         start_time_str = start_time.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
