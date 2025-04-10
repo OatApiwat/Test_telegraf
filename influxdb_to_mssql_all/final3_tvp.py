@@ -12,7 +12,6 @@ import os
 # โหลดค่าจากไฟล์ .env
 load_dotenv()
 
-# MEASUREMENT_LIST = ['test_data', 'test_data2', 'mesure_2', 'mesure_3', 'mesure_4']
 MEASUREMENT_PREFIXES = ['test#', 'mesure#']
 # InfluxDB client
 influx_client = None
@@ -115,7 +114,7 @@ def map_influx_to_mssql_type(influx_type):
     elif isinstance(influx_type, bool):
         return "BIT"
     elif isinstance(influx_type, datetime.datetime):
-        return "DATETIME"
+        return "DATETIME2(6)"
     return "NVARCHAR(255)"  # Default type
 
 def create_table_mssql(measurement):
@@ -178,8 +177,8 @@ def create_table_mssql(measurement):
             
             # Create table schema
             columns = []
-            column_info.append(("time", "DATETIME"))
-            columns.append("time DATETIME")
+            column_info.append(("time", "DATETIME2(6)"))
+            columns.append("time DATETIME2(6)")
             
             for key, value in latest_point.items():
                 if key != 'time':
@@ -225,17 +224,12 @@ def fetch_influxdb_data(column_info, measurement, time_exit):
             start_time = time_exit
         else:
             start_time = now - datetime.timedelta(minutes=INTERVAL * 5, seconds=now.second, microseconds=now.microsecond)
-        
-        end_time = now - datetime.timedelta(seconds=now.second, microseconds=now.microsecond)
-
-        start_time_str = start_time.strftime('%Y-%m-%dT%H:%M:%SZ')
-        end_time_str = end_time.strftime('%Y-%m-%dT%H:%M:%SZ')
+        start_time_str = start_time.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
 
         columns = [col[0] for col in column_info if col[0] != 'time']
         columns_str = ", ".join(columns)
 
-        query = f'SELECT {columns_str} FROM "{measurement}" WHERE time > \'{start_time_str}\' AND time <= \'{end_time_str}\''
-        
+        query = f'SELECT {columns_str} FROM "{measurement}" WHERE time > \'{start_time_str}\''
         result = influx_client.query(query)
         
         if not result:
@@ -267,8 +261,8 @@ def fetch_influxdb_data(column_info, measurement, time_exit):
                     if isinstance(time_value, str):
                         time_value = datetime.datetime.strptime(time_value, "%Y-%m-%dT%H:%M:%S.%fZ")
                     time_value = time_value + datetime.timedelta(hours=7)
-                    time_value = time_value.replace(microsecond=(time_value.microsecond // 1000) * 1000)
                     transformed_point['time'] = time_value
+
             transformed_data.append(transformed_point)
 
         return transformed_data
@@ -326,7 +320,7 @@ def insert_mssql(data, table_name):
         if conn:
             conn.close()
 
-def time_exited(table_name):
+def get_last_time(table_name):
     try:
         conn = connect_mssql()
         if not conn:
@@ -375,8 +369,8 @@ def main():
             for measurement in MEASUREMENT_LIST:
                 column_info = create_table_mssql(measurement)
                 if column_info is not None:
-                    time_exit = time_exited(f"{measurement}_tb")
-                    influx_data = fetch_influxdb_data(column_info, measurement, time_exit)
+                    last_time = get_last_time(f"{measurement}_tb")
+                    influx_data = fetch_influxdb_data(column_info, measurement, last_time)
                     print("ok")
                     insert_mssql(influx_data, f"{measurement}_tb")
             
