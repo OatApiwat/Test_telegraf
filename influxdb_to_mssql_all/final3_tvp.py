@@ -249,7 +249,7 @@ def fetch_influxdb_data(column_info, measurement, time_exit):
                     elif dtype == "BIT" and not isinstance(value, bool):
                         transformed_point[column] = bool(value)
                     elif dtype == "DATETIME" and not isinstance(value, datetime.datetime):
-                        transformed_point[column] = datetime.datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ")
+                        transformed_point[column] = datetime.datetime.strptime(value, "%Y-%m-%dT%H:%M:%S.%fZ")
                     else:
                         transformed_point[column] = value
                 elif column == 'time' and 'time' in point:
