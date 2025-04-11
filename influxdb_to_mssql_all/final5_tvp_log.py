@@ -353,7 +353,7 @@ def insert_mssql(data, table_name):
         conn.commit()
         success_msg = f"[insert_mssql] Successfully inserted {len(data)} rows into {table_name} using TVP"
         print(success_msg)
-        success_logger.info(success_msg)  # Log success to success.log
+        # success_logger.info(success_msg)  # Log success to success.log
         
     except Exception as e:
         error_msg = f"[insert_mssql] Error inserting data into MSSQL using TVP: {str(e)}"
