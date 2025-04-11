@@ -6,7 +6,7 @@ import threading
 # MQTT Broker Configuration
 BROKER = "localhost"  # เปลี่ยนเป็น IP หรือ hostname ของ MQTT Broker
 PORT = 1883           # พอร์ตของ MQTT Broker (ค่าเริ่มต้นคือ 1883)
-TOPIC_PREFIX = "iot_sensors/test_data2"  # Prefix สำหรับ topic
+TOPIC_PREFIX = "iot_sensors/iot_got2"  # Prefix สำหรับ topic
 NUM_TOPICS = 100       # จำนวน topics
 PUBLISH_INTERVAL = 3   # วินาที
 

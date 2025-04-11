@@ -29,7 +29,7 @@ success_logger.setLevel(logging.INFO)
 # โหลดค่าจากไฟล์ .env
 load_dotenv()
 
-MEASUREMENT_PREFIXES = ['test#', 'mesure#']
+MEASUREMENT_PREFIXES = ['test#', 'mesure#', 'iot_#']
 # InfluxDB client
 influx_client = None
 # Load environment variables
@@ -57,7 +57,7 @@ def connect_influxdb():
         print("Connected to InfluxDB")
         return True
     except Exception as e:
-        error_msg = f"InfluxDB connection failed: {str(e)}"
+        error_msg = f"[connect_influxdb] InfluxDB connection failed: {str(e)}"
         print(error_msg)
         error_logger.error(error_msg)
         influx_client = None
@@ -88,12 +88,12 @@ def connect_mssql():
             except pyodbc.Error as e:
                 continue
         
-        error_msg = "No suitable ODBC driver found"
+        error_msg = f"[connect_mssql] No suitable ODBC driver found"
         error_logger.error(error_msg)
         raise Exception(error_msg)
     
     except Exception as e:
-        error_msg = f"MSSQL connection failed: {str(e)}"
+        error_msg = f"[connect_mssql] MSSQL connection failed: {str(e)}"
         print(error_msg)
         error_logger.error(error_msg)
         return None
@@ -120,7 +120,7 @@ def get_measurements_from_influxdb(prefixes):
         return sorted(list(set(measurement_list)))
     
     except Exception as e:
-        error_msg = f"Error fetching measurements from InfluxDB: {str(e)}"
+        error_msg = f"[get_measurements_from_influxdb] Error fetching measurements from InfluxDB: {str(e)}"
         print(error_msg)
         error_logger.error(error_msg)
         return []
@@ -145,7 +145,7 @@ def create_table_mssql(measurement):
     
     mssql_conn = connect_mssql()
     if not mssql_conn:
-        error_msg = f"Failed to connect to MSSQL for creating table {table_name}"
+        error_msg = f"[create_table_mssql] Failed to connect to MSSQL for creating table {table_name}"
         error_logger.error(error_msg)
         return None
     
@@ -178,7 +178,7 @@ def create_table_mssql(measurement):
                 column_info.append((column[0], column[1]))
         else:
             if not influx_client:
-                error_msg = "No InfluxDB connection"
+                error_msg = f"[create_table_mssql] No InfluxDB connection"
                 print(error_msg)
                 error_logger.error(error_msg)
                 return None
@@ -187,14 +187,16 @@ def create_table_mssql(measurement):
             result = influx_client.query(query)
             
             if not result:
-                error_msg = f"No data found for measurement {measurement}"
+                error_msg = f"[create_table_mssql] No data found for measurement {measurement}"
                 print(error_msg)
+                error_logger.error(error_msg)
                 return None
                 
             points = list(result.get_points())
             if not points:
-                error_msg = f"No points found for measurement {measurement}"
+                error_msg = f"[create_table_mssql] No points found for measurement {measurement}"
                 print(error_msg)
+                error_logger.error(error_msg)
                 return None
                 
             latest_point = points[0]
@@ -231,7 +233,7 @@ def create_table_mssql(measurement):
         return column_info
         
     except Exception as e:
-        error_msg = f"Error creating table/type {table_name}: {str(e)}"
+        error_msg = f"[create_table_mssql] Error creating table/type {table_name}: {str(e)}"
         print(error_msg)
         error_logger.error(error_msg)
         return None
@@ -250,7 +252,7 @@ def fetch_influxdb_data(column_info, measurement, time_exit):
         start_time_str = start_time.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
 
         columns = [col[0] for col in column_info if col[0] != 'time']
-        columns_str = ", ".join(columns)
+        columns_str = ", ".join(columns) or "*"  # ถ้าไม่มีคอลัมน์ให้ใช้ "*"
         query = f'SELECT {columns_str} FROM "{measurement}" WHERE time >= \'{start_time_str}\''
         result = influx_client.query(query)
         
@@ -274,14 +276,22 @@ def fetch_influxdb_data(column_info, measurement, time_exit):
                         transformed_point[column] = str(value)
                     elif dtype == "BIT" and not isinstance(value, bool):
                         transformed_point[column] = bool(value)
-                    elif dtype == "DATETIME" and not isinstance(value, datetime.datetime):
-                        transformed_point[column] = datetime.datetime.strptime(value, "%Y-%m-%dT%H:%M:%S.%fZ")
+                    elif dtype == "DATETIME2(6)" and not isinstance(value, datetime.datetime):
+                        try:
+                            transformed_point[column] = datetime.datetime.strptime(value, "%Y-%m-%dT%H:%M:%S.%fZ")
+                        except ValueError:
+                            transformed_point[column] = datetime.datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ")
                     else:
                         transformed_point[column] = value
                 elif column == 'time' and 'time' in point:
                     time_value = point['time']
                     if isinstance(time_value, str):
-                        time_value = datetime.datetime.strptime(time_value, "%Y-%m-%dT%H:%M:%S.%fZ")
+                        try:
+                            # ลองแยกวิเคราะห์แบบมีไมโครวินาที
+                            time_value = datetime.datetime.strptime(time_value, "%Y-%m-%dT%H:%M:%S.%fZ")
+                        except ValueError:
+                            # ถ้าล้มเหลว ให้ใช้รูปแบบที่ไม่มีไมโครวินาที
+                            time_value = datetime.datetime.strptime(time_value, "%Y-%m-%dT%H:%M:%SZ")
                     time_value = time_value + datetime.timedelta(hours=7)
                     transformed_point['time'] = time_value
 
@@ -289,14 +299,16 @@ def fetch_influxdb_data(column_info, measurement, time_exit):
 
         return transformed_data
     except Exception as e:
-        error_msg = f"Error fetching data from InfluxDB: {str(e)}"
+        error_msg = f"[fetch_influxdb_data] Error fetching data from InfluxDB: {str(e)}"
         print(error_msg)
         error_logger.error(error_msg)
         return []
 
 def insert_mssql(data, table_name):
     if not data:
-        print(f"No data to insert into {table_name}")
+        success_msg = f"[insert_mssql] No data to insert into {table_name}"
+        print(success_msg)
+        success_logger.info(success_msg)  # Log success to success.log
         return
         
     measurement = table_name.replace('_tb', '')
@@ -305,7 +317,7 @@ def insert_mssql(data, table_name):
     try:
         conn = connect_mssql()
         if not conn:
-            error_msg = "MSSQL connection failed"
+            error_msg = f"[insert_mssql] MSSQL connection failed"
             print(error_msg)
             error_logger.error(error_msg)
             return
@@ -335,12 +347,12 @@ def insert_mssql(data, table_name):
         cursor.execute(sql, (tvp_data,))
         
         conn.commit()
-        success_msg = f"Successfully inserted {len(data)} rows into {table_name} using TVP"
+        success_msg = f"[insert_mssql] Successfully inserted {len(data)} rows into {table_name} using TVP"
         print(success_msg)
         success_logger.info(success_msg)  # Log success to success.log
         
     except Exception as e:
-        error_msg = f"Error inserting data into MSSQL using TVP: {str(e)}"
+        error_msg = f"[insert_mssql] Error inserting data into MSSQL using TVP: {str(e)}"
         print(error_msg)
         error_logger.error(error_msg)
     finally:
@@ -351,7 +363,7 @@ def get_last_time(table_name):
     try:
         conn = connect_mssql()
         if not conn:
-            error_msg = f"Error connecting to MSSQL for table {table_name}"
+            error_msg = f"[get_last_time] Error connecting to MSSQL for table {table_name}"
             print(error_msg)
             error_logger.error(error_msg)
             return None
@@ -375,7 +387,7 @@ def get_last_time(table_name):
         return latest_time
         
     except Exception as e:
-        error_msg = f"Error fetching latest time from MSSQL for table {table_name}: {str(e)}"
+        error_msg = f"[get_last_time] Error fetching latest time from MSSQL for table {table_name}: {str(e)}"
         print(error_msg)
         error_logger.error(error_msg)
         return None
@@ -409,7 +421,7 @@ def main():
             remaining_time = max(0, INTERVAL*60 - elapsed_time)
             time.sleep(remaining_time)
         except Exception as e:
-            error_msg = f"Main error: {str(e)}"
+            error_msg = f"[main] Main error: {str(e)}"
             print(error_msg)
             error_logger.error(error_msg)
 
