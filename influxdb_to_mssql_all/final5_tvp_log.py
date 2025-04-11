@@ -128,6 +128,7 @@ def get_tools_from_mssql():
         print(error_msg)
         error_logger.error(error_msg)
         return []
+
 def map_influx_to_mssql_type(influx_type):
     """Map InfluxDB data types to MSSQL data types"""
     if isinstance(influx_type, int):
@@ -256,7 +257,7 @@ def fetch_influxdb_data(column_info, measurement, time_exit):
 
         columns = [col[0] for col in column_info if col[0] != 'time']
         columns_str = ", ".join(columns) or "*"  # ถ้าไม่มีคอลัมน์ให้ใช้ "*"
-        query = f'SELECT {columns_str} FROM "{measurement}" WHERE time >= \'{start_time_str}\''
+        query = f'SELECT {columns_str} FROM "{measurement}" WHERE time >= \'{start_time_str}\' ORDER BY time ASC'
         result = influx_client.query(query)
         
         if not result:

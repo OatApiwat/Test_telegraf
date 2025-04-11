@@ -14,7 +14,7 @@ topic: iot_sensors/iot_{tools}/{machine_name}
 
 ## device_alive table
 table_name: device_master_tb
-topic: iot_sensors/device_{tools}/{machine_name}
+topic: iot_sensors/device_alive/{tools}_{machine_name}
 cycle = 30 sec
 id || tools || machine || process || location
 
