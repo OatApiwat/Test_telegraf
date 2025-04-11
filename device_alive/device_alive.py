@@ -4,7 +4,8 @@ import pyodbc
 from influxdb import InfluxDBClient
 from dotenv import load_dotenv
 import os
-import logging  # Added for logging
+import logging
+import logging.handlers  # เพิ่มสำหรับ RotatingFileHandler
 
 # Configure logging
 logging.basicConfig(
@@ -14,21 +15,27 @@ logging.basicConfig(
 
 # Error logger
 error_logger = logging.getLogger('error_logger')
-error_handler = logging.FileHandler('error.log')
+error_handler = logging.handlers.RotatingFileHandler(
+    'error.log', maxBytes=50*1024*1024, backupCount=5  # 50MB ต่อไฟล์, เก็บไฟล์เก่าสูงสุด 5 ไฟล์
+)
 error_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 error_logger.addHandler(error_handler)
 error_logger.setLevel(logging.ERROR)
 
 # Success logger
 success_logger = logging.getLogger('success_logger')
-success_handler = logging.FileHandler('success.log')
+success_handler = logging.handlers.RotatingFileHandler(
+    'success.log', maxBytes=50*1024*1024, backupCount=5  # 50MB ต่อไฟล์, เก็บไฟล์เก่าสูงสุด 5 ไฟล์
+)
 success_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 success_logger.addHandler(success_handler)
 success_logger.setLevel(logging.INFO)
 
-# Device logger (เปลี่ยนจาก debug.log เป็น log_device.log)
+# Device logger
 device_logger = logging.getLogger('device_logger')
-device_handler = logging.FileHandler('log_device.log')  # เปลี่ยนชื่อไฟล์เป็น log_device.log
+device_handler = logging.handlers.RotatingFileHandler(
+    'log_device.log', maxBytes=10*1024*1024, backupCount=5  # 10MB ต่อไฟล์, เก็บไฟล์เก่าสูงสุด 5 ไฟล์
+)
 device_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 device_logger.addHandler(device_handler)
 device_logger.setLevel(logging.DEBUG)
@@ -127,8 +134,8 @@ def get_topic_from_mssql():
         # Create a list of dictionaries with topic, process, and location
         topic_list = [
             {
-                'topic': f"iot_sensors/device_log/{row[0]}_{row[1]}",
-                'iot_topic':f"iot_sensors/iot_{row[0]}/{row[1]}",
+                'topic': f"iot_sensors/device_alive/{row[0]}_{row[1]}",
+                'iot_topic': f"iot_sensors/iot_{row[0]}/{row[1]}",
                 'process': row[2],
                 'location': row[3]
             }
@@ -168,23 +175,23 @@ def fetch_influxdb_data(topic_list):
             try:
                 # Extract measurement name from topic
                 measurement = 'device_alive'
-                
+                print("topic:", topic)
                 # Query InfluxDB for the latest data point
-                query = f'SELECT * FROM "{measurement}" WHERE time > now() - 1m ORDER BY time DESC LIMIT 1'
+                query = f'SELECT * FROM "{measurement}" WHERE topic = \'{topic}\' and time > now() - 1m ORDER BY time DESC LIMIT 1'
                 result = influx_client.query(query)
-                
+
                 # Check if result contains data
-                if result and measurement in result:
+                if result:
                     data_points = list(result[measurement])
                     result_data[topic] = data_points
                     
                     # Log success for topic with data
-                    success_msg = f"[fetch_influxdb_data] Successfully fetched data for topic: {iot_topic}, data: {data_points}, process: {process}, location: {location}"
-                    success_logger.info(success_msg)
-                    print(success_msg)
+                    # success_msg = f"[fetch_influxdb_data] Successfully fetched data for topic: {topic}, process: {process}, location: {location}"
+                    # success_logger.info(success_msg)
+                    # print(success_msg)
                 else:
                     # Log empty result for topic
-                    device_msg = f"[fetch_influxdb_data] No data found for topic: {iot_topic}, process: {process}, location: {location}"
+                    device_msg = f"[fetch_influxdb_data] Device disconnected for topic: {topic}, process: {process}, location: {location}"
                     device_logger.debug(device_msg)
                     # print(device_msg)
                     
@@ -199,6 +206,7 @@ def fetch_influxdb_data(topic_list):
         print(error_msg)
         
     return result_data
+
 def main():
     while True:
         try:
@@ -216,7 +224,7 @@ def main():
             elapsed_time = time.time() - start_time
             remaining_time = max(0, INTERVAL*60 - elapsed_time)
             time.sleep(remaining_time)
-            print("using_time: ",time.time()-start_time)
+            print("using_time: ", time.time() - start_time)
         except Exception as e:
             error_msg = f"[main] Main error: {str(e)}"
             print(error_msg)

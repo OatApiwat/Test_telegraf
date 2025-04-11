@@ -10,6 +10,10 @@ TOPIC_PREFIX = "iot_sensors/iot_got1"  # Prefix สำหรับ topic
 NUM_TOPICS = 200       # จำนวน topics
 PUBLISH_INTERVAL = 3   # วินาที
 
+TOPIC_PREFIX2 = "iot_sensors/device_log/got_"  # Prefix สำหรับ topic
+NUM_TOPICS2 = 200       # จำนวน topics
+PUBLISH_INTERVAL2 = 30   # วินาที
+
 count = 0
 # Payload Template
 def generate_payload(topic_id,count):
@@ -25,6 +29,14 @@ def generate_payload(topic_id,count):
         "data_9": 1000000,
         "data_11": 1000000.058,
     }
+def generate_payload2(topic_id2,count):
+    return {
+        "master": f"data_{topic_id2}",
+        "data_id": count,
+        "master_id": "test",
+        "cpu": 1000000,
+        "ram": 1000000,
+    }
 
 # Publish Messages to MQTT Broker
 def publish_topic(client, topic_id,count):
@@ -33,6 +45,13 @@ def publish_topic(client, topic_id,count):
     print(payload)
     client.publish(topic, json.dumps(payload))
     print(f"Published to {topic}: {payload}")
+
+def publish_topic2(client, topic_id,count):
+    topic2 = f"{TOPIC_PREFIX2}/mc_{topic_id}"
+    payload = generate_payload2(topic_id,count)
+    print(payload)
+    client.publish(topic2, json.dumps(payload))
+    print(f"Published to {topic2}: {payload}")
 
 # Thread for publishing messages continuously
 def publish_all_topics(client):
