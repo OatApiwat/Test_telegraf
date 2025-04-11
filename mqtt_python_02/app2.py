@@ -8,7 +8,7 @@ BROKER = "localhost"  # Change to IP or hostname of MQTT Broker
 PORT = 1883           # Port of MQTT Broker (default is 1883)
 TOPIC_PREFIX = "iot_sensors/iot_got2"  # Prefix for topic1
 NUM_TOPICS = 100       # Number of topics for topic1
-PUBLISH_INTERVAL = 3   # Seconds for topic1
+PUBLISH_INTERVAL = 10   # Seconds for topic1
 
 TOPIC_PREFIX2 = "iot_sensors/device_alive/got2_"  # Prefix for topic2
 NUM_TOPICS2 = 100       # Number of topics for topic2

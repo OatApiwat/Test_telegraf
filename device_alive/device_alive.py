@@ -25,7 +25,7 @@ error_logger.setLevel(logging.ERROR)
 # Success logger
 success_logger = logging.getLogger('success_logger')
 success_handler = logging.handlers.RotatingFileHandler(
-    'success.log', maxBytes=50*1024*1024, backupCount=5  # 50MB ต่อไฟล์, เก็บไฟล์เก่าสูงสุด 5 ไฟล์
+    'success.log', maxBytes=10*1024*1024, backupCount=5  # 50MB ต่อไฟล์, เก็บไฟล์เก่าสูงสุด 5 ไฟล์
 )
 success_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 success_logger.addHandler(success_handler)
@@ -34,7 +34,7 @@ success_logger.setLevel(logging.INFO)
 # Device logger
 device_logger = logging.getLogger('device_logger')
 device_handler = logging.handlers.RotatingFileHandler(
-    'log_device.log', maxBytes=10*1024*1024, backupCount=5  # 10MB ต่อไฟล์, เก็บไฟล์เก่าสูงสุด 5 ไฟล์
+    'log_device.log', maxBytes=50*1024*1024, backupCount=5  # 10MB ต่อไฟล์, เก็บไฟล์เก่าสูงสุด 5 ไฟล์
 )
 device_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 device_logger.addHandler(device_handler)
@@ -186,8 +186,8 @@ def fetch_influxdb_data(topic_list):
                     result_data[topic] = data_points
                     
                     # Log success for topic with data
-                    # success_msg = f"[fetch_influxdb_data] Successfully fetched data for topic: {topic}, process: {process}, location: {location}"
-                    # success_logger.info(success_msg)
+                    success_msg = f"[fetch_influxdb_data] Successfully fetched data for topic: {topic}, process: {process}, location: {location}"
+                    success_logger.info(success_msg)
                     # print(success_msg)
                 else:
                     # Log empty result for topic
