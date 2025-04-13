@@ -16,7 +16,7 @@ topic: iot_sensors/iot_{tools}/{machine_name}
 table_name: device_master_tb
 topic: iot_sensors/device_alive/{tools}_{machine_name}
 cycle = 30 sec
-id || tools || machine || process || location
+id || tools || machine || process || location || ip_address
 
 create device_master_tb
 -- ใช้ฐานข้อมูล iot_db
@@ -27,6 +27,7 @@ CREATE TABLE device_master_tb (
     tools NVARCHAR(50) NULL,
     machine NVARCHAR(50) NULL,
     process NVARCHAR(50) NULL,
+    location NVARCHAR(50) NULL,
     location NVARCHAR(50) NULL,
     PRIMARY KEY (id)
 );
@@ -40,10 +41,10 @@ WITH MachineNumbers AS (
     WHERE type = 'P' AND number BETWEEN 1 AND 200
 )
 -- เพิ่มข้อมูลลงใน device_master_tb
-INSERT INTO device_master_tb (tools, machine, process, location)
-SELECT 'got1', 'mc_' + machine_num, 'A', 'B'
+INSERT INTO device_master_tb (tools, machine, process, location,ip_address)
+SELECT 'got1', 'mc_' + machine_num, 'A', 'B','192.168.100.' + machine_num
 FROM MachineNumbers
 UNION ALL
-SELECT 'got2', 'mc_' + machine_num, 'A', 'B'
+SELECT 'got2', 'mc_' + machine_num, 'A', 'B','192.168.100.' + machine_num
 FROM MachineNumbers;
 
